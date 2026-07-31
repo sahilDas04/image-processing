@@ -1,0 +1,26 @@
+[project]
+name = "uv-fastapi-example"
+version = "0.1.0"
+description = "FastAPI project"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "alembic>=1.18.5",
+    "asyncpg>=0.31.0",
+    "authlib>=1.7.2",
+    "boto3>=1.43.61",
+    "fastapi[all,standard]",
+    "google-auth>=2.56.2",
+    "httpx2>=2.9.1",
+    "mysql-connector-python>=26.7.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pillow>=12.3.0",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "pytest>=9.1.1",
+    "python-dotenv>=1.2.2",
+    "python-jose[cryptography]>=3.5.0",
+    "requests>=2.34.2",
+    "sqlalchemy>=2.0.51",
+]
