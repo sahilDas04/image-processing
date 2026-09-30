@@ -20,6 +20,8 @@ Types of changes:
 ### Phase 2: Production Foundation (In Progress)
 
 #### Added
+- **Deployment (free tier)** — `server/Dockerfile` (uv-based, `alembic upgrade head` on boot), `server/.dockerignore`, `render.yaml` (Render blueprint), `client/vercel.json` (SPA rewrite), `DEPLOYMENT.md` (Render + Neon + Vercel + Cloudflare R2 guide), `server/.env.example` production template
+- **Production config** — `DATABASE_URL` override (full-URL wins over `postgres_*` fields); `POSTGRES_SSLMODE` for Neon/Render SSL connections; `ALLOWED_ORIGINS` accepts comma-separated *or* JSON array values; DB credentials URL-encoded in the generated asyncpg URL
 - **Image Processing**
   - `from_pdf` operation — render a selected PDF page to PNG/JPEG/WebP (pypdfium2, page param)
   - `from_pdf` "all pages" — render every page and download as a ZIP
@@ -30,11 +32,13 @@ Types of changes:
   - `GET /api/v1/history` — paginated processing history (newest first, eager-loaded variants)
   - `GET /api/v1/history/{id}` — single job with variants
   - `GET /api/v1/history/{id}/download` — re-download a stored result (optionally a specific variant)
+  - `DELETE /api/v1/history/{id}` — permanent delete of a job, its variants (DB cascade), and its stored result bytes
   - `JobRepository` (list_for_user / get_for_user) + `JobOut`/`VariantOut` schemas
   - Frontend **History page** (`/history`) — operation cards, status badges, per-variant download buttons, pagination, empty state, react-query data fetching
   - Frontend **About page** (`/about`) — feature grid + "how it works" steps
   - Routes `/history` and `/about` registered as protected routes in `App.tsx` (Navbar links already existed)
   - History entries now show **image result previews** — `GET /api/v1/history/{id}/preview` serves a variant's bytes inline (`Content-Disposition: inline`, image mime types only); the History page renders a lazy-loaded object-URL thumbnail per variant
+  - History page **delete** — per-entry Delete button (confirm dialog) calls `DELETE /api/v1/history/{id}`, optimistically removes the card, toast feedback
 - **OAuth nonce binding (server-side CSRF protection)**
   - `GOOGLE_CLIENT_ID` login now sends a `nonce` through the authorization URL; `GoogleCodeExchangeRequest` accepts it and `verify_google_token` asserts it matches the ID token's `nonce` claim
   - Client `lib/oauth.ts` generates/stashes/sends the nonce; `AuthContext` removed the `code_verifier` console log

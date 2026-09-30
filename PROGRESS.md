@@ -16,7 +16,7 @@
 | **Build** | 2 of 2 checks | ✅ Passing |
 | **Image Upload** | 4 of 5 features | 🟡 Partial |
 | **Image Management** | 4 of 6 features | 🟡 Partial |
-| **History** | 4 of 4 features | ✅ Complete |
+| **History** | 5 of 5 features | ✅ Complete |
 | **Security** | 6 of 7 features | 🟡 Partial |
 | **Logging** | 1 of 3 features | 🟡 Partial |
 | **Auth** | 6 of 6 features | ✅ Complete |
@@ -28,7 +28,7 @@
 | **Pages** | 4 of 5 pages | ✅ Complete |
 | **Background Jobs** | 0 of 6 features | ❌ Missing |
 | **Testing** | 1 of 3 suites | 🟡 Partial |
-| **DevOps** | 0 of 6 services | ❌ Missing |
+| **DevOps** | 4 of 8 artifacts | 🟡 Partial |
 | **Monitoring** | 0 of 5 tools | ❌ Missing |
 | **Admin Panel** | 0 of 5 panels | ❌ Missing |
 
@@ -97,7 +97,9 @@
 | History | List history | `GET /api/v1/history` — paginated, newest first, variants eager-loaded (`JobRepository.list_for_user`) |
 | History | Job detail | `GET /api/v1/history/{id}` — single job + variants (`get_for_user`) |
 | History | Re-download result | `GET /api/v1/history/{id}/download` — streams stored result, optional `variant_id`, safe Content-Disposition |
-| Frontend | History page | `/history` — operation cards, status badges, per-variant download buttons, pagination, react-query |
+| History | Preview result | `GET /api/v1/history/{id}/preview` — inline image bytes for thumbnails |
+| History | Delete entry | `DELETE /api/v1/history/{id}` — removes job + variants + stored bytes |
+| Frontend | History page | `/history` — operation cards, status badges, per-variant download buttons, image previews, delete, pagination, react-query |
 | Frontend | About page | `/about` — feature grid + how-it-works steps |
 | Frontend | Protected routes | `/history` + `/about` registered in `App.tsx` behind auth |
 | Security | JWT secret hardening | Rejects placeholders/`< 32` char secrets, auto-generates strong secret |
@@ -165,10 +167,11 @@
 - [x] Soft-delete + restore
 - [ ] Batch download (zip archive)
 
-#### Processing Jobs (3 of 6 done)
+#### Processing Jobs (4 of 6 done)
 - [x] Job record (id, status, operation, params, result) — `Job`/`Variant` models + persistence
 - [ ] Job status polling (WebSocket or short polling) — not needed yet (synchronous processing)
 - [x] Job history list — `/api/v1/history` + History page
+- [x] Delete history entry — `DELETE /api/v1/history/{id}` + Delete button on History page
 - [ ] Retry failed job
 - [ ] Cancel pending job
 - [ ] Celery background worker task
@@ -193,8 +196,10 @@
 - [ ] System health dashboard
 
 #### DevOps
-- [ ] `Dockerfile` for backend (Python 3.12 slim)
-- [ ] `Dockerfile` for frontend (Nginx static serve)
+- [x] `Dockerfile` for backend (uv Python 3.12 slim build → runtime image, `alembic upgrade head` + uvicorn on boot)
+- [x] `vercel.json` for frontend (SPA rewrites for client-side routes)
+- [x] `render.yaml` blueprint + `DEPLOYMENT.md` free-tier guide (Render + Neon + Vercel + Cloudflare R2)
+- [x] Production config (`DATABASE_URL` override, `POSTGRES_SSLMODE`, comma/JSON `ALLOWED_ORIGINS`, URL-encoded DB creds)
 - [ ] `Dockerfile` for Celery worker
 - [ ] `docker-compose.yml` (app + DB + Redis + worker + Nginx)
 - [ ] Nginx config (reverse proxy, SSL, static files, rate limiting)

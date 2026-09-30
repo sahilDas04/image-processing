@@ -1,6 +1,8 @@
+import json
 import logging
 import secrets
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -44,11 +46,28 @@ class _Settings(BaseSettings):
         return normalized
 
     # ── PostgreSQL ──
+    # Full connection string; if set, wins over the individual postgres_* fields.
+    database_url_override: str = ""
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "image_processing_db"
     postgres_user: str = "postgres"
     postgres_password: str = ""
+    # Neon/Render require SSL. "require" encrypts; "disable" allows insecure local dev.
+    postgres_sslmode: str = "disable"
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        # Accept both JSON arrays and comma-separated env values.
+        if isinstance(value, str):
+            if value.strip().startswith("["):
+                try:
+                    return json.loads(value)
+                except ValueError:
+                    return []
+            return [o.strip() for o in value.split(",") if o.strip()]
+        return value
 
     # ── Google OAuth ──
     google_client_id: str = ""
@@ -75,10 +94,17 @@ class _Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        # A full DATABASE_URL override wins (easy for Neon/Render one-line paste).
+        if self.database_url_override:
+            return self.database_url_override
+        url = (
+            f"postgresql+asyncpg://{quote_plus(self.postgres_user)}:"
+            f"{quote_plus(self.postgres_password)}@{self.postgres_host}:"
+            f"{self.postgres_port}/{self.postgres_db}"
         )
+        if self.postgres_sslmode and self.postgres_sslmode != "disable":
+            url += f"?sslmode={self.postgres_sslmode}"
+        return url
 
     @property
     def google_auth_configured(self) -> bool:

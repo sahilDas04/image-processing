@@ -80,6 +80,28 @@ async def get_job(
     return JobOut.model_validate(job)
 
 
+@router.delete("/{job_id}", status_code=status.HTTP_200_OK)
+async def delete_job(
+    job_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Permanently delete a job and its stored result bytes."""
+    repo = JobRepository(session)
+    storage_keys = await repo.delete_for_user(user_id=user.id, job_id=job_id)
+    if storage_keys is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    for key in storage_keys:
+        try:
+            await storage.delete(key)
+        except KeyError:
+            # Bytes already gone from storage; the DB row is still removed.
+            pass
+
+    return {"message": "Job deleted."}
+
+
 @router.get("/{job_id}/preview")
 async def preview_job_result(
     job_id: uuid.UUID,

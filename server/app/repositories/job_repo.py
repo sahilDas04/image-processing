@@ -94,3 +94,19 @@ class JobRepository:
             .options(selectinload(Job.variants))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def delete_for_user(self, *, user_id: uuid.UUID, job_id: uuid.UUID) -> list[str] | None:
+        """Soft-delete no-op aside: hard-delete a job (and its variants).
+
+        Returns the variant storage keys that were removed so the caller can
+        purge the bytes from storage, or ``None`` if the job does not belong to
+        the user.
+        """
+        job = await self.get_for_user(user_id=user_id, job_id=job_id)
+        if job is None:
+            return None
+
+        storage_keys = [variant.storage_key for variant in job.variants]
+        await self._session.delete(job)
+        await self._session.commit()
+        return storage_keys

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconDownload,
   IconHistory,
@@ -10,9 +10,11 @@ import {
   IconPhoto,
   IconPackage,
   IconRefresh,
+  IconTrash,
 } from "@tabler/icons-react";
 
 import { Navbar } from "@/components";
+import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { formatBytes, cn } from "@/lib/utils";
 
@@ -141,6 +143,8 @@ function JobVariantPreview({ job, variant }: { job: Job; variant: Variant }) {
 export default function HistoryPage() {
   const [skip, setSkip] = useState(0);
   const [limit] = useState(25);
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const historyQuery = useQuery({
     queryKey: ["history", skip, limit],
@@ -150,6 +154,28 @@ export default function HistoryPage() {
       }),
     select: (res) => res.data,
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (jobId: string) => api.delete(`/api/v1/history/${jobId}`),
+    onSuccess: (_data, jobId) => {
+      queryClient.setQueryData<HistoryResponse>(
+        ["history", skip, limit],
+        (prev) =>
+          prev ? { ...prev, items: prev.items.filter((j) => j.id !== jobId), total: prev.total - 1 } : prev,
+      );
+      showToast({ type: "success", title: "Deleted", message: "History entry removed." });
+    },
+    onError: () => {
+      showToast({ type: "error", title: "Delete failed", message: "Could not delete this entry." });
+    },
+  });
+
+  const handleDelete = useCallback((job: Job) => {
+    const label = OPERATION_LABELS[job.operation] ?? job.operation;
+    if (window.confirm(`Delete this ${label} entry from your history? This cannot be undone.`)) {
+      deleteMutation.mutate(job.id);
+    }
+  }, [deleteMutation]);
 
   const jobs = historyQuery.data?.items ?? null;
   const total = historyQuery.data?.total ?? 0;
@@ -288,6 +314,19 @@ export default function HistoryPage() {
                         ))}
                       </div>
                     )}
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(job)}
+                        disabled={deleteMutation.isPending}
+                        className="flex items-center gap-1.5 rounded-full border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 shadow-sm transition-all hover:bg-red-500/20 hover:border-red-400/50 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Delete ${OPERATION_LABELS[job.operation] ?? "result"} from history`}
+                      >
+                        <IconTrash className="size-3.5" aria-hidden="true" />
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}

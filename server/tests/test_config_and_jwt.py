@@ -59,6 +59,59 @@ def test_placeholder_secret_cannot_decode_real_tokens():
         jwt.decode(forged, cfg.secret_key, algorithms=["HS256"])
 
 
+def test_database_url_omits_sslmode_when_disabled():
+    cfg = _make_settings(
+        secret_key="A" * 64,
+        postgres_user="user name",
+        postgres_password="p@ss:word/456",
+        postgres_host="db.example.com",
+        postgres_port=5432,
+        postgres_db="appdb",
+        postgres_sslmode="disable",
+    )
+    url = cfg.database_url
+    assert url.startswith("postgresql+asyncpg://user+name:p%40ss%3Aword%2F456@db.example.com:5432/appdb")
+    assert "sslmode" not in url
+
+
+def test_database_url_appends_sslmode_when_required():
+    cfg = _make_settings(
+        secret_key="A" * 64,
+        postgres_user="postgres",
+        postgres_password="secret",
+        postgres_host="ep-foo.aws.neon.tech",
+        postgres_port=5432,
+        postgres_db="appdb",
+        postgres_sslmode="require",
+    )
+    assert cfg.database_url.endswith("?sslmode=require")
+
+
+def test_database_url_override_wins():
+    cfg = _make_settings(
+        secret_key="A" * 64,
+        database_url_override="postgresql+asyncpg://u:p@neon.example.com/db?sslmode=require",
+        postgres_host="localhost",
+    )
+    assert cfg.database_url == "postgresql+asyncpg://u:p@neon.example.com/db?sslmode=require"
+
+
+def test_allowed_origins_accepts_comma_separated_values():
+    cfg = _make_settings(
+        secret_key="A" * 64,
+        allowed_origins="https://app.vercel.app, https://api.onrender.com",
+    )
+    assert cfg.allowed_origins == ["https://app.vercel.app", "https://api.onrender.com"]
+
+
+def test_allowed_origins_accepts_json_array():
+    cfg = _make_settings(
+        secret_key="A" * 64,
+        allowed_origins='["https://app.vercel.app", "https://api.onrender.com"]',
+    )
+    assert cfg.allowed_origins == ["https://app.vercel.app", "https://api.onrender.com"]
+
+
 def datetime_plus_minutes(minutes: int):
     from datetime import datetime, timedelta, timezone
 
