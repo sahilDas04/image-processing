@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/api";
-import { GOOGLE_REDIRECT_URI, takeOAuthState } from "@/lib/oauth";
+import { takeOAuthState } from "@/lib/oauth";
 
 // ── Types ──
 
@@ -17,6 +17,8 @@ export type User = {
   name: string | null;
   avatar_url: string | null;
 };
+
+const GOOGLE_REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? "http://localhost:5173";
 
 type AuthContextValue = {
   user: User | null;
@@ -84,28 +86,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function init() {
       try {
         if (code && state) {
-          const { state: storedState, verifier } = takeOAuthState();
+          const { state: storedState, verifier, nonce } = takeOAuthState();
+
           if (!storedState || storedState !== state) {
             setAuthError("Sign-in failed (state mismatch). Please try again.");
             return;
           }
-          const res = await api.post<{ access_token: string }>(
-            "/api/v1/auth/google/code",
-            {
-              code,
-              code_verifier: verifier,
-              redirect_uri: GOOGLE_REDIRECT_URI,
-            },
-          );
-          await login(res.data.access_token);
-          // Drop ?code=…&state=… from the URL now that it's consumed.
-          window.history.replaceState({}, "", "/");
-          return;
+          try {
+            const res = await api.post<{ access_token: string }>(
+              "/api/v1/auth/google/code",
+              {
+                code,
+                code_verifier: verifier,
+                redirect_uri: GOOGLE_REDIRECT_URI,
+                nonce: nonce ?? "",
+              },
+            );
+            console.log("[Auth] Token exchange successful");
+            await login(res.data.access_token);
+            // Drop ?code=…&state=… from the URL now that it's consumed.
+            window.history.replaceState({}, "", "/");
+            return;
+          } catch (tokenError: unknown) {
+            console.error("[Auth] Token exchange failed:", tokenError);
+            const errorMessage = tokenError instanceof Error ? tokenError.message : "Unknown error";
+            if (errorMessage.includes("400")) {
+              setAuthError("Sign-in failed: Invalid redirect URI or code. Please try again.");
+            } else {
+              setAuthError("Sign-in failed. Please try again.");
+            }
+            return;
+          }
         }
 
         const storedToken = localStorage.getItem("token");
         if (!storedToken) {
           setToken(null);
+          setIsLoading(false);
           return;
         }
 

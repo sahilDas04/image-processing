@@ -20,6 +20,27 @@ Types of changes:
 ### Phase 2: Production Foundation (In Progress)
 
 #### Added
+- **Image Processing**
+  - `from_pdf` operation — render a selected PDF page to PNG/JPEG/WebP (pypdfium2, page param)
+  - `from_pdf` "all pages" — render every page and download as a ZIP
+  - `to_pdf` operation — combine one or more images into a multi-page PDF (`POST /api/v1/images/to-pdf`)
+  - Format-conversion UI — target-format dropdown for `convert` (JPEG ↔ PNG ↔ WebP) and `from_pdf`
+- **Processing History Persistence**
+  - `Job` / `Variant` records now created for every `/api/v1/images/process` and `/api/v1/images/to-pdf` result; outputs are stored through the configured `StorageProvider`
+  - `GET /api/v1/history` — paginated processing history (newest first, eager-loaded variants)
+  - `GET /api/v1/history/{id}` — single job with variants
+  - `GET /api/v1/history/{id}/download` — re-download a stored result (optionally a specific variant)
+  - `JobRepository` (list_for_user / get_for_user) + `JobOut`/`VariantOut` schemas
+  - Frontend **History page** (`/history`) — operation cards, status badges, per-variant download buttons, pagination, empty state, react-query data fetching
+  - Frontend **About page** (`/about`) — feature grid + "how it works" steps
+  - Routes `/history` and `/about` registered as protected routes in `App.tsx` (Navbar links already existed)
+  - History entries now show **image result previews** — `GET /api/v1/history/{id}/preview` serves a variant's bytes inline (`Content-Disposition: inline`, image mime types only); the History page renders a lazy-loaded object-URL thumbnail per variant
+- **OAuth nonce binding (server-side CSRF protection)**
+  - `GOOGLE_CLIENT_ID` login now sends a `nonce` through the authorization URL; `GoogleCodeExchangeRequest` accepts it and `verify_google_token` asserts it matches the ID token's `nonce` claim
+  - Client `lib/oauth.ts` generates/stashes/sends the nonce; `AuthContext` removed the `code_verifier` console log
+
+#### Changed
+- **Frontend** — colorful gradient theme, modern rounded cards, updated operation picker, and a redesigned login page (brand panel + feature chips)
 - **Storage**
   - `StorageProvider` ABC (save/load/delete/list/exists + optional signed URL)
   - `LocalStorageProvider` — filesystem backend, path-traversal safe (dev default)
@@ -35,13 +56,29 @@ Types of changes:
   - `GET /api/v1/images/{id}/download` — stream original bytes from storage
   - `PATCH /api/v1/images/{id}` — rename (`filename`/`original_name`)
   - `DELETE /api/v1/images/{id}` — soft-delete (`deleted_at`)
-
-#### Changed
 - Image validation (MIME, magic bytes, size) extracted to `app/services/image_validation.py`; used by both `/process` and `/upload`
 
 #### Fixed
+- **Image upload returned 422 Unprocessable Content** — `lib/upload.ts` `regularUpload` sent the file under the field name `file`, but `POST /api/v1/upload` declares `files: list[UploadFile]`; FastAPI rejected the missing field with a 422. The form now appends `files`, matching the backend schema.
 - `app/db/models/image.py` — `DateTime` used without being imported (broke app import)
 - `Image.jobs` relationship missing the matching side of `Job.image` (`back_populates`) — broke SQLAlchemy mapper initialization
+- **Navbar account dropdown** — `.glass-strong`'s `@apply relative` (defined later in `@layer utilities`) was overriding Tailwind's `absolute` utility on the menu, so it rendered in normal flow (off-screen above the button) instead of below it. Split the glass styling into a new `.glass-menu` class that does not force `position`, used by both the desktop account menu and the mobile menu.
+- **Navbar dropdown overflow** — account menu wrapper got `relative` so the absolute-positioned dropdown anchors correctly instead of overflowing the pill navbar
+- **Page scrolling** — `.page-bg` now uses `min-h-svh` (was `min-h-screen`, which overflowed on browsers where `100vh` exceeds the visual viewport); scrollbar thumb switched to `bg-primary/40` for visibility
+- **Login page layout** — redesigned left panel: brand header + "Welcome Back" heading on top; hero image removed for a cleaner look; feature chips retained
+- **Blank page root cause** — `IconLayer` is not exported by `@tabler/icons-react`; `Login.tsx` crashed the React tree at runtime. Replaced with `IconStack2`
+
+#### Security
+- **JWT secret hardening** — `_Settings.secret_key` rejects known placeholders (`change-me-in-production`, `your_generated_secret_key`, …) and secrets shorter than 32 chars, auto-generating a random secret (with a `CRITICAL` log) instead; `server/.env` now carries a generated 64-char secret
+- **CORS hardening** — `allow_credentials=False` (Bearer auth only); `assert_safe_cors_origins()` fails fast if `ALLOWED_ORIGINS` contains `*`; OpenAPI docs gated behind `DEBUG_OPENAPI`
+- **Path traversal** — chunked-upload `_get_chunk_dir` validates `upload_id` against a strict hex-UUID regex and re-resolves/resolves-relative before use; `/upload/init` bounds `total_chunks` and requires positive `file_size`; `/upload/chunk` reads through the size-capped reader; `/upload/finalize` validates `upload_id`
+- **Memory DoS** — `read_upload_limited()` streams reads in 1 MB chunks and aborts once the cap is exceeded (was: full buffering before size check); empty `/uploads` HTTP 413; `max_request_body_size` dead code removed from `main.py`
+- **PDF page cap** — `PdfToImageProcessor.render_all` rejects PDFs over `MAX_PDF_PAGES=64` (HTTP 422) to bound rasterization work
+- **Rate limiting** — dependency-free in-process sliding-window limiter (`app/core/rate_limit.py`, tokens per-IP per-minute) applied to `POST /auth/google` and `/auth/google/code`; `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PER_MINUTE` config
+- **Auth endpoint validation** — `get_current_user` parses `sub` as a UUID (crafted non-UUID tokens now 401 instead of reaching the DB); nonce verified server-side in the PKCE exchange; `client_id`-bound Google token verification
+- **Header injection** — `app/core/filenames.py`: `sanitize_filename()` strips CR/LF/quotes/control chars; `build_content_disposition()` emits safe RFC 5987 values; used on `/images/{id}/download`, `/history/{id}/download`, `/images/process`, `/images/to-pdf`
+- **Security headers** — added `Content-Security-Policy` (default-src 'none', strict frame/form), `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`; HSTS emitted on HTTPS requests; `X-Frame-Options`/`Referrer-Policy`/`X-Content-Type-Options` retained
+- **Test suite** — new `pytest` suite (37 tests) under `server/tests/` covering: placeholder/short secret rejection, token signature binding, chunk-upload traversal rejection, bounded-read 413s, PDF page cap, rate-limiter windows + 429 dependency, header presence, filename sanitization, CORS wildcard guard
 
 ### Phase 2: Production Foundation (Planned)
 

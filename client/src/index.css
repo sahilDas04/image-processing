@@ -1,26 +1,10 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/outfit";
-
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Outfit Variable', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -49,82 +33,252 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.96 0.02 290);
+    --foreground: oklch(0.3 0.09 290);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.3 0.09 290);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.3 0.09 290);
+    --primary: oklch(0.541 0.281 293.009);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.94 0.03 290);
+    --secondary-foreground: oklch(0.35 0.08 290);
+    --muted: oklch(0.94 0.03 290);
+    --muted-foreground: oklch(0.5 0.07 290);
+    --accent: oklch(0.94 0.03 290);
+    --accent-foreground: oklch(0.35 0.08 290);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --border: oklch(0.85 0.04 290);
+    --input: oklch(0.85 0.04 290);
+    --ring: oklch(0.65 0.2 293);
+    --radius: 0.75rem;
 }
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+/* Glassmorphism utilities */
+@layer utilities {
+  /* Base glass panel — frosted, subtle border, inner glow */
+  .glass {
+    @apply relative overflow-hidden bg-white/25 backdrop-blur-2xl border border-white/40 rounded-3xl shadow-[0_8px_32px_rgba(90,70,160,0.14)];
+  }
+  .glass::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/30 to-transparent;
+  }
+
+  /* Stronger glass for cards/panels that sit on vibrant backgrounds */
+  .glass-strong {
+    @apply relative overflow-hidden bg-white/35 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-[0_12px_40px_rgba(90,70,160,0.18)];
+  }
+  .glass-strong::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/40 to-transparent;
+  }
+
+  /* Glass used on absolutely-positioned panels (menus/dropdowns) — does NOT
+     force `position`, so the Tailwind `absolute` utility keeps working. */
+  .glass-menu {
+    @apply overflow-hidden bg-white/35 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-[0_12px_40px_rgba(90,70,160,0.18)];
+  }
+  .glass-menu::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/40 to-transparent;
+  }
+
+  /* Glass for form controls / small elements */
+  .glass-control {
+    @apply bg-white/25 backdrop-blur-xl border border-white/40 rounded-xl shadow-sm;
+  }
+  .glass-control:focus-within,
+  .glass-control:hover {
+    @apply border-white/60;
+  }
+
+  /* Inner highlight for buttons / interactive glass */
+  .glass-highlight {
+    @apply relative overflow-hidden;
+  }
+  .glass-highlight::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-white/10;
+  }
+
+  /* Input overrides inside glass */
+  .glass input,
+  .glass select,
+  .glass textarea {
+    @apply bg-transparent text-foreground placeholder:text-muted-foreground/70;
+  }
+  .glass input:focus,
+  .glass select:focus,
+  .glass textarea:focus {
+    @apply outline-none ring-0;
+  }
+
+  /* Page background with radial gradient */
+  .page-bg {
+    background-image: radial-gradient(circle, #e1d9f3, #e0d7f0, #e0d5ee, #dfd3eb, #ded1e8, #ddcfe7, #dccee6, #dbcce5, #d9cae6, #d7c8e6, #d5c7e7, #d3c5e8);
+    background-repeat: no-repeat;
+    background-size: cover;
+    @apply min-h-svh;
+  }
 }
 
+/* Animations */
+@layer utilities {
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-out {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+
+  .animate-slide-out {
+    animation: slide-out 0.2s ease-in forwards;
+  }
+
+  .animate-slide-down {
+    animation: slide-down 0.3s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  .animate-fade-out {
+    animation: fade-out 0.2s ease-in forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out;
+  }
+}
+
+/* Focus visible styles for accessibility */
+@layer base {
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Remove focus ring for mouse users */
+  *:focus:not(:focus-visible) {
+    @apply outline-none ring-0;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar styling */
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary/40 rounded-full border-2 border-transparent bg-clip-content;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary/60;
+  }
+}
+
+/* Keyframes */
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
+  }
+
+  /* Selection styles */
+  ::selection {
+    @apply bg-primary/30 text-primary-foreground;
+  }
+
+  /* Input focus improvements */
+  input:focus,
+  select:focus,
+  textarea:focus,
+  button:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .glass,
+    .glass-strong,
+    .glass-control {
+      @apply border-2;
     }
+  }
 }

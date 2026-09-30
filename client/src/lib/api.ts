@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ── 401 interceptor: clear token and redirect to login ──
+// ── Error interceptor: handle 401 and 400 ──
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -27,6 +27,10 @@ api.interceptors.response.use(
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }
+    }
+    // Log 400 errors for debugging
+    if (error.response?.status === 400) {
+      console.error("[API] 400 Bad Request:", error.response.data);
     }
     return Promise.reject(error);
   },

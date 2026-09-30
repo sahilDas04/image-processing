@@ -1,17 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AxiosResponse } from "axios";
+import { IconWand, IconX } from "@tabler/icons-react";
+
 import {
-  IconPhotoUp,
-  IconWand,
-  IconX,
-  IconLogout,
-  IconDownload,
-} from "@tabler/icons-react";
-
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
+  Button,
+  Navbar,
+  UploadDropzone,
+  UploadProgress,
+  OperationCard,
+  OPERATIONS,
+  OperationConfig,
+  ImagePreview,
+  DownloadButton,
+  useToast,
+} from "@/components";
 import { api } from "@/lib/api";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+import { formatBytes } from "@/lib/utils";
+import { smartUpload, type UploadProgress as UploadProgressData } from "@/lib/upload";
 
 type Operation =
   | "grayscale"
@@ -20,22 +25,24 @@ type Operation =
   | "enhance"
   | "rotate"
   | "resize"
-  | "reduce_size";
+  | "reduce_size"
+  | "convert"
+  | "from_pdf"
+  | "to_pdf";
 
-const operations: Array<{ value: Operation; label: string }> = [
-  { value: "grayscale", label: "Grayscale" },
-  { value: "blur", label: "Blur" },
-  { value: "sharpen", label: "Sharpen" },
-  { value: "enhance", label: "Enhance" },
-  { value: "rotate", label: "Rotate" },
-  { value: "resize", label: "Resize" },
-  { value: "reduce_size", label: "Reduce size" },
-];
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+  "application/zip": "zip",
+};
 
 export default function HomePage() {
-  const { user, logout } = useAuth();
+  const { showToast } = useToast();
 
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [operation, setOperation] = useState<Operation>("grayscale");
   const [angle, setAngle] = useState(90);
   const [width, setWidth] = useState(600);
@@ -43,14 +50,33 @@ export default function HomePage() {
   const [strength, setStrength] = useState(1.25);
   const [quality, setQuality] = useState(75);
   const [maxDimension, setMaxDimension] = useState(1600);
+  const [outputFormat, setOutputFormat] = useState("png");
+  const [page, setPage] = useState(1);
+  const [allPages, setAllPages] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultSize, setResultSize] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [resultType, setResultType] = useState("");
+  const [processingState, setProcessingState] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Upload state
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressData | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isUploadComplete, setIsUploadComplete] = useState(false);
+  const [isUploadError, setIsUploadError] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploadPaused, setIsUploadPaused] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const previewFile = operation === "to_pdf" ? (files[0] ?? null) : file;
+  const isPdf =
+    previewFile?.type === "application/pdf" ||
+    previewFile?.name.toLowerCase().endsWith(".pdf");
 
   const previewUrl = useMemo(
-    () => (file ? URL.createObjectURL(file) : null),
-    [file],
+    () => (previewFile && !isPdf ? URL.createObjectURL(previewFile) : null),
+    [previewFile, isPdf],
   );
 
   useEffect(() => {
@@ -65,14 +91,79 @@ export default function HomePage() {
     };
   }, [resultUrl]);
 
-  async function processImage() {
-    if (!file) {
-      setError("Choose an image first.");
+  const isImageResult = resultType === "" || resultType.startsWith("image/");
+
+  const applyResult = useCallback((response: AxiosResponse) => {
+    const blob = response.data as Blob;
+    const headerType = response.headers["content-type"];
+    const type = blob.type || (typeof headerType === "string" ? headerType : "");
+    setResultSize(blob.size);
+    setResultType(type);
+    setResultUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(blob);
+    });
+    setProcessingState("success");
+    showToast({
+      type: "success",
+      title: "Processing Complete",
+      message: "Your image has been processed successfully",
+    });
+  }, [showToast]);
+
+  const handleError = useCallback((err: unknown) => {
+    const message = err instanceof Error ? err.message : "Something went wrong.";
+    setError(message);
+    setProcessingState("error");
+    showToast({
+      type: "error",
+      title: "Processing Failed",
+      message,
+    });
+  }, [showToast]);
+
+  const convertToPdf = useCallback(async () => {
+    if (files.length === 0) {
+      showToast({ type: "error", title: "No images selected", message: "Choose at least one image." });
       return;
     }
 
     setError(null);
     setIsProcessing(true);
+    setProcessingState("processing");
+    showToast({ type: "loading", title: "Converting to PDF…", message: "Please wait" });
+
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+
+    try {
+      const response = await api.post("/api/v1/images/to-pdf", formData, {
+        responseType: "blob",
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      applyResult(response);
+    } catch (err: unknown) {
+      handleError(err);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [files, applyResult, handleError, showToast]);
+
+  const processImage = useCallback(async () => {
+    if (operation === "to_pdf") {
+      await convertToPdf();
+      return;
+    }
+
+    if (!file) {
+      showToast({ type: "error", title: "No image", message: "Choose an image first." });
+      return;
+    }
+
+    setError(null);
+    setIsProcessing(true);
+    setProcessingState("processing");
+    showToast({ type: "loading", title: "Processing image…", message: "Please wait" });
 
     const formData = new FormData();
     formData.append("file", file);
@@ -81,296 +172,328 @@ export default function HomePage() {
     formData.append("strength", String(strength));
     formData.append("quality", String(quality));
     formData.append("max_dimension", String(maxDimension));
+    formData.append("output_format", outputFormat);
 
     if (operation === "resize") {
       formData.append("width", String(width));
       formData.append("height", String(height));
     }
 
+    if (operation === "from_pdf") {
+      formData.append("page", String(page));
+      formData.append("all_pages", String(allPages));
+    }
+
     try {
-      // Use the Axios api instance so JWT is auto-attached
       const response = await api.post("/api/v1/images/process", formData, {
         responseType: "blob",
         headers: { "Content-Type": "multipart/form-data" },
       });
-
-      const blob = response.data as Blob;
-      setResultSize(blob.size);
-      setResultUrl((current) => {
-        if (current) URL.revokeObjectURL(current);
-        return URL.createObjectURL(blob);
-      });
+      applyResult(response);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Something went wrong.");
-      }
+      handleError(err);
     } finally {
       setIsProcessing(false);
     }
-  }
+  }, [operation, file, convertToPdf, angle, strength, quality, maxDimension, outputFormat, width, height, page, allPages, applyResult, handleError, showToast]);
 
-  function clearImage() {
+  const clearImage = useCallback(() => {
     setFile(null);
+    setFiles([]);
     setResultUrl((current) => {
       if (current) URL.revokeObjectURL(current);
       return null;
     });
     setResultSize(null);
+    setResultType("");
+    setProcessingState("idle");
     setError(null);
-  }
+    // Reset upload state
+    setIsUploading(false);
+    setIsUploadComplete(false);
+    setIsUploadError(false);
+    setUploadError(null);
+    setUploadProgress(null);
+    setIsUploadPaused(false);
+  }, []);
 
-  function downloadProcessed() {
-    if (!resultUrl) return;
-    const a = document.createElement("a");
-    a.href = resultUrl;
-    a.download = "processed.png";
-    a.click();
-  }
+  const handleFilesSelect = useCallback(async (selectedFiles: File[]) => {
+    if (operation === "to_pdf") {
+      setFiles(selectedFiles);
+    } else {
+      const selectedFile = selectedFiles[0] ?? null;
+      setFile(selectedFile);
+
+      // Start upload for the selected file
+      if (selectedFile) {
+        await handleFileUpload(selectedFile);
+      }
+    }
+    setResultUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    setResultSize(null);
+    setResultType("");
+    setProcessingState("idle");
+    setError(null);
+    showToast({
+      type: "success",
+      title: "File Selected",
+      message: `Ready to process ${selectedFiles[0]?.name ?? `${selectedFiles.length} files`}`,
+    });
+  }, [operation, showToast]);
+
+  const handleFileUpload = useCallback(async (fileToUpload: File) => {
+    setIsUploading(true);
+    setIsUploadComplete(false);
+    setIsUploadError(false);
+    setUploadError(null);
+    setUploadProgress(null);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      const result = await smartUpload(fileToUpload, {
+        onProgress: (progress) => setUploadProgress(progress),
+        signal: abortController.signal,
+      });
+
+      if (result.success) {
+        setIsUploadComplete(true);
+        showToast({
+          type: "success",
+          title: "Upload Complete",
+          message: `${fileToUpload.name} uploaded successfully`,
+        });
+      } else {
+        setIsUploadError(true);
+        setUploadError(result.error || "Upload failed");
+        showToast({
+          type: "error",
+          title: "Upload Failed",
+          message: result.error || "Failed to upload file",
+        });
+      }
+    } catch (err: unknown) {
+      setIsUploadError(true);
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUploadError(message);
+      showToast({
+        type: "error",
+        title: "Upload Failed",
+        message,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [showToast]);
+
+  const handleCancelUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsUploading(false);
+    setIsUploadError(false);
+    setUploadError(null);
+    setUploadProgress(null);
+  }, []);
+
+  const handleRetryUpload = useCallback(async () => {
+    if (file) {
+      await handleFileUpload(file);
+    }
+  }, [file, handleFileUpload]);
+
+  const pickerAccept =
+    operation === "from_pdf"
+      ? "application/pdf"
+      : operation === "to_pdf"
+        ? "image/png,image/jpeg,image/webp"
+        : "image/png,image/jpeg,image/webp";
+
+  const originalMeta =
+    operation === "to_pdf"
+      ? files.length > 0
+        ? `${files.length} file${files.length > 1 ? "s" : ""} · ${formatBytes(
+            files.reduce((sum, f) => sum + f.size, 0),
+          )}`
+        : null
+      : file
+        ? formatBytes(file.size)
+        : null;
+
+  const originalEmptyText =
+    operation === "to_pdf"
+      ? "Choose one or more images — each becomes a PDF page."
+      : file && isPdf
+        ? "PDF selected — pages appear after processing."
+        : "Upload an image to get started. Drag and drop an image here or use the upload button.";
+
+  const processedEmptyText =
+    processingState === "processing"
+      ? "Processing your image…"
+      : "Your processed image will appear here. Select an operation and click Process.";
 
   return (
-    <main className="min-h-svh bg-background text-foreground">
-      <div className="mx-auto grid min-h-svh max-w-7xl grid-cols-1 gap-6 px-5 py-5 lg:grid-cols-[320px_1fr]">
-        <aside className="flex min-h-0 flex-col border border-border bg-card">
-          <div className="border-b border-border p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Image Lab
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold">Process images</h1>
-              </div>
-            </div>
-            {user && (
-              <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
-                <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
-                <button
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
-                  title="Sign out"
-                  type="button"
-                  onClick={logout}
-                >
-                  <IconLogout className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-            )}
-          </div>
+    <main className="page-bg min-h-svh text-foreground">
+      <Navbar />
 
-          <div className="flex flex-1 flex-col gap-5 p-4">
-            <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-3 border border-dashed border-border bg-muted/30 p-4 text-center transition-colors hover:bg-muted">
-              <IconPhotoUp className="size-8 text-muted-foreground" aria-hidden="true" />
-              <span className="text-sm font-medium">
-                {file ? file.name : "Choose JPEG, PNG, or WebP"}
-              </span>
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  setResultUrl((current) => {
-                    if (current) URL.revokeObjectURL(current);
-                    return null;
-                  });
-                  setResultSize(null);
-                  setError(null);
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-5 pb-6 pt-[2rem]">
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_1fr]">
+          {/* Left Sidebar - Operations */}
+          <aside className="glass flex flex-col overflow-hidden h-fit">
+            <div className="border-b border-white/20 p-5">
+              <h2 className="text-xl font-bold text-foreground">Operations</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Choose what to do with your image</p>
+            </div>
+
+            <div className="flex flex-col gap-5 p-5">
+              {/* Upload Dropzone */}
+              <UploadDropzone
+                accept={pickerAccept}
+                multiple={operation === "to_pdf"}
+                onFilesSelect={handleFilesSelect}
+                currentFiles={operation === "to_pdf" ? files : (file ? [file] : [])}
+                onClear={clearImage}
+                disabled={isProcessing || isUploading}
+              />
+
+              {/* Upload Progress */}
+              {(isUploading || isUploadComplete || isUploadError) && (
+                <UploadProgress
+                  progress={uploadProgress?.progress ?? 0}
+                  uploadedBytes={uploadProgress?.uploadedBytes ?? 0}
+                  totalBytes={uploadProgress?.totalBytes ?? file?.size ?? 0}
+                  speed={uploadProgress?.speed ?? 0}
+                  fileName={file?.name ?? "File"}
+                  isUploading={isUploading}
+                  isComplete={isUploadComplete}
+                  isError={isUploadError}
+                  errorMessage={uploadError ?? undefined}
+                  onCancel={handleCancelUpload}
+                  onRetry={handleRetryUpload}
+                  isPaused={isUploadPaused}
+                />
+              )}
+
+              {/* Operation Categories */}
+              <div className="mt-2 space-y-4">
+                {OPERATIONS.map((category) => (
+                  <div key={category.id} className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                      {category.name}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
+                      {category.operations.map((op) => (
+                        <OperationCard
+                          key={op.value}
+                          operation={op}
+                          isSelected={operation === op.value}
+                          onSelect={(value) => setOperation(value as Operation)}
+                          disabled={isProcessing}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Operation Config */}
+              <OperationConfig
+                operation={operation}
+                config={{
+                  angle,
+                  width,
+                  height,
+                  strength,
+                  quality,
+                  maxDimension,
+                  outputFormat,
+                  page,
+                  allPages,
+                  onChange: (key: string, value: unknown) => {
+                    if (key === "angle") setAngle(value as number);
+                    if (key === "width") setWidth(value as number);
+                    if (key === "height") setHeight(value as number);
+                    if (key === "strength") setStrength(value as number);
+                    if (key === "quality") setQuality(value as number);
+                    if (key === "maxDimension") setMaxDimension(value as number);
+                    if (key === "outputFormat") setOutputFormat(value as string);
+                    if (key === "page") setPage(value as number);
+                    if (key === "allPages") setAllPages(value as boolean);
+                  },
                 }}
               />
-            </label>
 
-            <div className="grid grid-cols-2 gap-2">
-              {operations.map((item) => (
-                <button
-                  className={`border px-3 py-2 text-left text-sm transition-colors ${
-                    operation === item.value
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-muted"
-                  }`}
-                  key={item.value}
-                  type="button"
-                  onClick={() => setOperation(item.value)}
+              {error && (
+                <div
+                  className="rounded-xl border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+                  role="alert"
                 >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+                  {error}
+                </div>
+              )}
 
-            {operation === "rotate" ? (
-              <label className="grid gap-2 text-sm">
-                Angle
-                <input
-                  className="h-9 border border-input bg-background px-3"
-                  max={360}
-                  min={-360}
-                  type="number"
-                  value={angle}
-                  onChange={(event) => setAngle(Number(event.target.value))}
-                />
-              </label>
-            ) : null}
-
-            {operation === "resize" ? (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-2 text-sm">
-                  Width
-                  <input
-                    className="h-9 border border-input bg-background px-3"
-                    max={4000}
-                    min={1}
-                    type="number"
-                    value={width}
-                    onChange={(event) => setWidth(Number(event.target.value))}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm">
-                  Height
-                  <input
-                    className="h-9 border border-input bg-background px-3"
-                    max={4000}
-                    min={1}
-                    type="number"
-                    value={height}
-                    onChange={(event) => setHeight(Number(event.target.value))}
-                  />
-                </label>
-              </div>
-            ) : null}
-
-            {operation === "enhance" ? (
-              <label className="grid gap-2 text-sm">
-                Strength
-                <input
-                  className="accent-primary"
-                  max={3}
-                  min={1}
-                  step={0.05}
-                  type="range"
-                  value={strength}
-                  onChange={(event) => setStrength(Number(event.target.value))}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {strength.toFixed(2)}x
-                </span>
-              </label>
-            ) : null}
-
-            {operation === "reduce_size" ? (
-              <div className="grid gap-3">
-                <label className="grid gap-2 text-sm">
-                  JPEG quality
-                  <input
-                    className="accent-primary"
-                    max={95}
-                    min={10}
-                    step={1}
-                    type="range"
-                    value={quality}
-                    onChange={(event) => setQuality(Number(event.target.value))}
-                  />
-                  <span className="text-xs text-muted-foreground">{quality}%</span>
-                </label>
-                <label className="grid gap-2 text-sm">
-                  Max dimension
-                  <input
-                    className="h-9 border border-input bg-background px-3"
-                    max={4000}
-                    min={100}
-                    step={50}
-                    type="number"
-                    value={maxDimension}
-                    onChange={(event) => setMaxDimension(Number(event.target.value))}
-                  />
-                </label>
-              </div>
-            ) : null}
-
-            {error ? (
-              <p className="border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="mt-auto flex gap-2">
-              <Button className="flex-1" disabled={isProcessing} onClick={processImage}>
-                <IconWand aria-hidden="true" />
-                {isProcessing ? "Processing" : "Process"}
-              </Button>
-              <Button aria-label="Clear image" disabled={!file} variant="outline" size="icon" onClick={clearImage}>
-                <IconX aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-        </aside>
-
-        <section className="grid min-h-[calc(100svh-2.5rem)] grid-cols-1 gap-4 lg:grid-cols-2">
-          <ImagePanel
-            title="Original"
-            imageUrl={previewUrl}
-            emptyText="Upload an image to preview it."
-            meta={file ? formatBytes(file.size) : null}
-          />
-          <ImagePanel
-            title="Processed"
-            imageUrl={resultUrl}
-            emptyText="Run an operation to see the result."
-            meta={resultSize ? formatBytes(resultSize) : null}
-            actions={
-              resultUrl ? (
-                <Button variant="outline" size="xs" onClick={downloadProcessed}>
-                  <IconDownload aria-hidden="true" />
-                  Download
+              {/* Process Button */}
+              <div className="mt-auto flex gap-2">
+                <Button
+                  className="flex-1 gap-2 rounded-full bg-gradient-to-r from-primary to-primary/80 text-white shadow-[0_4px_16px_rgba(90,70,160,0.35)] hover:from-primary/90 hover:to-primary/70 hover:shadow-[0_6px_20px_rgba(90,70,160,0.45)] transition-all"
+                  disabled={isProcessing || (!file && files.length === 0) || processingState === "processing" || isUploading}
+                  onClick={processImage}
+                  aria-label={isProcessing ? "Processing" : "Process image"}
+                >
+                  <IconWand className={isProcessing ? "animate-spin" : ""} aria-hidden="true" />
+                  {processingState === "processing" ? "Processing…" : "Process"}
                 </Button>
-              ) : undefined
-            }
-          />
-        </section>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={clearImage}
+                  disabled={!file && files.length === 0}
+                  aria-label="Clear selection"
+                  className="glass-control rounded-full"
+                >
+                  <IconX aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          </aside>
+
+          {/* Right Area - Previews */}
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ImagePreview
+              title="Original"
+              imageUrl={previewUrl}
+              emptyText={originalEmptyText}
+              meta={originalMeta}
+              file={previewFile}
+              onRemove={clearImage}
+            />
+            <ImagePreview
+              title="Processed"
+              imageUrl={isImageResult ? resultUrl : null}
+              emptyText={processedEmptyText}
+              meta={resultSize ? formatBytes(resultSize) : null}
+              resultType={resultType}
+              isProcessing={processingState === "processing"}
+              file={null}
+              actions={
+                resultUrl ? (
+                  <DownloadButton
+                    url={resultUrl}
+                    filename={`processed.${EXTENSION_BY_TYPE[resultType] || "bin"}`}
+                    type={resultType}
+                    onDownload={() => showToast({ type: "success", title: "Download Started" })}
+                  />
+                ) : undefined
+              }
+            />
+          </section>
+        </div>
       </div>
     </main>
   );
-}
-
-function ImagePanel({
-  title,
-  imageUrl,
-  emptyText,
-  meta,
-  actions,
-}: {
-  title: string;
-  imageUrl: string | null;
-  emptyText: string;
-  meta?: string | null;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-80 flex-col border border-border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <span className="text-sm font-medium">{title}</span>
-        <div className="flex items-center gap-2">
-          {meta ? <span className="text-xs text-muted-foreground">{meta}</span> : null}
-          {actions}
-        </div>
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-muted/20 p-4">
-        {imageUrl ? (
-          <img
-            className="max-h-full max-w-full object-contain"
-            src={imageUrl}
-            alt={`${title} preview`}
-          />
-        ) : (
-          <p className="text-center text-sm text-muted-foreground">{emptyText}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }

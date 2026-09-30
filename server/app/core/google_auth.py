@@ -1,14 +1,17 @@
 from app.core.config import settings
 
 
-async def verify_google_token(token: str) -> dict:
+async def verify_google_token(token: str, *, expected_nonce: str | None = None) -> dict:
     """Verify a Google OAuth credential token and return user info.
 
     Returns a dict with keys: sub, email, name, picture.
+    If ``expected_nonce`` is given it must match the ID token's "nonce" claim,
+    otherwise a ValueError is raised.
 
     Raises ValueError if:
       - Google OAuth is not configured (no GOOGLE_CLIENT_ID).
       - The token is invalid or expired.
+      - The nonce claim does not match ``expected_nonce``.
     """
     if not settings.google_auth_configured:
         raise ValueError(
@@ -29,6 +32,12 @@ async def verify_google_token(token: str) -> dict:
 
         if info.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
             raise ValueError("Invalid token issuer.")
+
+        if expected_nonce is not None:
+            if not expected_nonce:
+                raise ValueError("A nonce is required for this flow.")
+            if info.get("nonce") != expected_nonce:
+                raise ValueError("Invalid nonce in ID token.")
 
         return {
             "sub": info["sub"],

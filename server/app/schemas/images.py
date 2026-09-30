@@ -16,6 +16,8 @@ class ImageOperation(StrEnum):
     rotate = "rotate"
     resize = "resize"
     reduce_size = "reduce_size"
+    from_pdf = "from_pdf"
+    to_pdf = "to_pdf"
 
 
 class ImageFormat(StrEnum):
@@ -32,6 +34,8 @@ class ImageProcessOptions(BaseModel):
     strength: float = Field(default=1.25, ge=1, le=3)
     quality: int = Field(default=75, ge=10, le=95)
     max_dimension: int = Field(default=1600, ge=100, le=4000)
+    page: int = Field(default=1, ge=1)
+    all_pages: bool = False
     output_format: ImageFormat = ImageFormat.png
 
 

@@ -4,6 +4,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import LoginPage from "@/pages/Login";
 import HomePage from "@/pages/Home";
+import HistoryPage from "@/pages/History";
+import AboutPage from "@/pages/About";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +28,22 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <HomePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <HistoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/about"
+              element={
+                <ProtectedRoute>
+                  <AboutPage />
                 </ProtectedRoute>
               }
             />

@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.google_auth import verify_google_token
+from app.core.rate_limit import rate_limit
 from app.core.security import create_access_token
 from app.db.models.user import User
 from app.repositories.user_repo import UserRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+login_rate_limit = rate_limit("auth-login")
+exchange_rate_limit = rate_limit("auth-exchange")
 
 
 # ── Schemas ──
@@ -28,6 +32,10 @@ class GoogleCodeExchangeRequest(BaseModel):
     code: str
     code_verifier: str
     redirect_uri: str
+    # Client-generated crypto-random value that was embedded in the
+    # authorization request and returned in the ID token. Verified against the
+    # ID token's "nonce" claim to bind this exchange to an exact browser flow.
+    nonce: str = ""
 
 
 class AuthResponse(BaseModel):
@@ -86,6 +94,7 @@ async def google_login(
     body: GoogleLoginRequest,
     request: Request,
     session: AsyncSession = Depends(get_db),
+    _: None = Depends(login_rate_limit),
 ) -> AuthResponse:
     """Exchange a Google OAuth credential token for a JWT."""
 
@@ -118,6 +127,7 @@ async def google_code_login(
     body: GoogleCodeExchangeRequest,
     request: Request,
     session: AsyncSession = Depends(get_db),
+    _: None = Depends(exchange_rate_limit),
 ) -> AuthResponse:
     """Exchange a Google authorization code (server-side PKCE flow) for a JWT.
 
@@ -125,8 +135,14 @@ async def google_code_login(
     authorization code + code_verifier for tokens on the server. This flow
     only needs the *Authorized redirect URIs* to be registered — it does not
     depend on Google Identity Services or the "Authorized JavaScript origins"
-    field.
+    field. The login nonce embedded in the authorization URL is verified
+    against the returned ID token to bind the exchange to this browser flow.
     """
+
+    logger.info(
+        "OAuth code exchange request: redirect_uri=%s, code_length=%s",
+        body.redirect_uri, len(body.code) if body.code else 0,
+    )
 
     if not settings.google_client_secret:
         raise HTTPException(
@@ -137,6 +153,7 @@ async def google_code_login(
     parsed = urlparse(body.redirect_uri)
     origin = f"{parsed.scheme}://{parsed.netloc}"
     if origin not in ALLOWED_REDIRECT_ORIGINS:
+        logger.warning("Unregistered redirect_uri: %s (origin: %s)", body.redirect_uri, origin)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unregistered redirect_uri.",
@@ -155,6 +172,7 @@ async def google_code_login(
                     "code_verifier": body.code_verifier,
                 },
             )
+        logger.info("Google token response: status=%s", resp.status_code)
     except httpx.HTTPError as exc:
         logger.error("google_token_exchange_network_error: %s", exc)
         raise HTTPException(
@@ -164,15 +182,23 @@ async def google_code_login(
 
     if resp.status_code != 200:
         logger.error(
-            "google_token_exchange_failed status=%s body=%s",
-            resp.status_code, resp.text,
+            "google_token_exchange_failed status=%s body=%s redirect_uri=%s",
+            resp.status_code, resp.text, body.redirect_uri,
         )
+        # Return the actual Google error for better debugging
+        try:
+            google_error = resp.json()
+            error_detail = google_error.get("error_description") or google_error.get("error") or "Google token exchange failed"
+        except Exception:
+            error_detail = f"Google token exchange failed (status {resp.status_code}): {resp.text}"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google token exchange failed. Please sign in again.",
+            detail=error_detail,
         )
 
-    id_token_str = resp.json().get("id_token")
+    token_data = resp.json()
+    logger.info("Google token response keys: %s", list(token_data.keys()))
+    id_token_str = token_data.get("id_token")
     if not id_token_str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -180,7 +206,7 @@ async def google_code_login(
         )
 
     try:
-        info = await verify_google_token(id_token_str)
+        info = await verify_google_token(id_token_str, expected_nonce=body.nonce)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

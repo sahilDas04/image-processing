@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,14 +31,18 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload.",
             )
-    except ValueError:
+        # "sub" must be a UUID to be usable as a DB key; refusing non-UUID
+        # values here turns a crafted token into a clean 401 instead of a
+        # database type error (potential 500).
+        parsed_user_id = uuid.UUID(user_id)
+    except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token.",
         )
 
     repo = UserRepository(session)
-    user = await repo.get(user_id)
+    user = await repo.get(parsed_user_id)
     if user is None or user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

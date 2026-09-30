@@ -1,6 +1,6 @@
 # Image Processing Web App — Progress Tracker
 
-> **Last Updated:** 2026-07-31  
+> **Last Updated:** 2026-09-30  
 > **Current Phase:** Phase 2 (Production Foundation) — In Progress  
 > **Next Phase:** Phase 3 (Power Features)
 
@@ -10,21 +10,24 @@
 
 | Module | Coverage | Status |
 |--------|----------|--------|
-| **Backend API** | 8 of 8 core features | ✅ Complete |
-| **Image Processing** | 9 of ~15 ops | ✅ Core set done |
-| **Frontend UI** | 6 of 6 MVP features | ✅ Complete |
+| **Backend API** | 10 of 10 core features | ✅ Complete |
+| **Image Processing** | 11 of ~15 ops | ✅ Core set done |
+| **Frontend UI** | 8 of 8 features | ✅ Complete |
 | **Build** | 2 of 2 checks | ✅ Passing |
-| **Image Upload** | 3 of 5 features | 🟡 Partial |
+| **Image Upload** | 4 of 5 features | 🟡 Partial |
 | **Image Management** | 4 of 6 features | 🟡 Partial |
-| **Security** | 2 of 7 features | 🟡 Partial |
+| **History** | 4 of 4 features | ✅ Complete |
+| **Security** | 6 of 7 features | 🟡 Partial |
 | **Logging** | 1 of 3 features | 🟡 Partial |
-| **Auth** | 5 of 6 features | 🟡 Partial |
-| **Database** | 6 of 7 features | 🟡 Partial |
-| **Repository Layer** | 2 of 5 repos | 🟡 Partial |
+| **Auth** | 6 of 6 features | ✅ Complete |
+| **Database** | 7 of 7 features | ✅ Complete |
+| **Repository Layer** | 4 of 5 repos | 🟡 Partial |
 | **Storage** | 4 of 4 providers | ✅ Complete |
-| **Frontend Architecture** | 0 of 5 libs | ❌ Missing |
+| **Frontend Architecture** | 4 of 5 libs | 🟡 Partial |
+| **Notifications** | 1 of 3 features | 🟡 Partial |
+| **Pages** | 4 of 5 pages | ✅ Complete |
 | **Background Jobs** | 0 of 6 features | ❌ Missing |
-| **Testing** | 0 of 3 suites | ❌ Missing |
+| **Testing** | 1 of 3 suites | 🟡 Partial |
 | **DevOps** | 0 of 6 services | ❌ Missing |
 | **Monitoring** | 0 of 5 tools | ❌ Missing |
 | **Admin Panel** | 0 of 5 panels | ❌ Missing |
@@ -88,61 +91,63 @@
 | Image Mgmt | List images | `GET /api/v1/images` — paginated, `search` filter |
 | Image Mgmt | Get image metadata | `GET /api/v1/images/{id}` |
 | Image Mgmt | Download original | `GET /api/v1/images/{id}/download` — streams from storage |
-| Image Mgmt | Rename | `PATCH /api/v1/images/{id}` — `filename`/`original_name` |
-| Image Mgmt | Soft-delete | `DELETE /api/v1/images/{id}` — sets `deleted_at`, restorable |
+| Image Mgmt | Update image | `PATCH /api/v1/images/{id}` — `filename`/`original_name` |
+| Image Mgmt | Delete image | `DELETE /api/v1/images/{id}` — soft-delete (`deleted_at`), restorable |
+| History | Job persistence | `Job`/`Variant` rows created for every `/process` and `/to-pdf` result; outputs stored via `StorageProvider` |
+| History | List history | `GET /api/v1/history` — paginated, newest first, variants eager-loaded (`JobRepository.list_for_user`) |
+| History | Job detail | `GET /api/v1/history/{id}` — single job + variants (`get_for_user`) |
+| History | Re-download result | `GET /api/v1/history/{id}/download` — streams stored result, optional `variant_id`, safe Content-Disposition |
+| Frontend | History page | `/history` — operation cards, status badges, per-variant download buttons, pagination, react-query |
+| Frontend | About page | `/about` — feature grid + how-it-works steps |
+| Frontend | Protected routes | `/history` + `/about` registered in `App.tsx` behind auth |
+| Security | JWT secret hardening | Rejects placeholders/`< 32` char secrets, auto-generates strong secret |
+| Security | CORS hardening | `allow_credentials=False`, wildcard-origin guard, OpenAPI gated behind `DEBUG_OPENAPI` |
+| Security | Path traversal | chunk-upload `upload_id` validated + resolved-relative; `total_chunks` capped; positive `file_size` |
+| Security | Memory DoS | `read_upload_limited()` 1 MB streamed reads abort at cap (413); PDF page cap (64, HTTP 422) |
+| Security | Rate limiting | In-process sliding-window limiter on auth endpoints (`/auth/google` + `/auth/google/code`) |
+| Security | OAuth nonce | Nonce generated client-side, verified server-side against the ID-token claim (CSRF) |
+| Security | Header injection | `sanitize_filename()` + RFC 5987 `build_content_disposition()` on all download routes |
+| Security | Security headers | CSP, COOP, CORP, HSTS (HTTPS), retained nosniff/DENY/strict-origin-referrer |
+| Security | pytest suite | 37 tests — secrets, tokens, traversal, 413s, PDF cap, rate limit, headers, filenames, CORS |
 
 ### 🟡 Partially Working
 
 | Module | Feature | What's Done | What's Missing |
 |--------|---------|-------------|----------------|
 | Upload | Validation | MIME check (content-type), size limit (configurable), magic bytes verification | File signature scan (virus), content sanitization |
-| Upload | Drag/drop | File picker via `<input>` | True drag-and-drop zone with visual feedback |
 | Processing | Compression | `reduce_size` + `compress` ops exist | Dedicated `/compress` route with clear semantics |
-| Processing | Format conversion | `convert` op handles JPEG/PNG/WebP output | User-selectable format dropdown in UI |
-| API Design | REST API | Single `/process` endpoint works | Separate resources (upload, images, jobs, variants) |
-| Security | CORS | Configured for `localhost:5173` + `127.0.0.1:5173` | Production origins, wildcard flexibility |
-| Security | Headers | 4 basic headers set | CSP, HSTS, Expect-CT, Cache-Control for static assets |
+| API Design | REST API | `/process`, `/upload`, `/images`, `/history` | Separate `/jobs`, `/variants` resources |
+| Security | Headers | CSP, COOP, CORP, HSTS, nosniff, DENY, referrer | Cache-Control for static assets |
 | Logging | Processing logs | Operation + size logged | Request timing, per-user audit trail, structured JSON logs |
-| Frontend | Responsive UI | CSS grid adapts to viewport | Full responsive layout with mobile nav, breakpoints |
+| Frontend | Responsive UI | CSS grid adapts to viewport, mobile nav, drag-and-drop zone | Full responsive polish, breakpoints |
 
 ### ❌ Not Implemented Yet
 
-#### Authentication
-- [ ] Google OAuth backend token validation (authlib)
-- [ ] JWT access + refresh token generation
-- [ ] `@requires_auth` dependency guard for protected routes
-- [ ] User provisioning / profile endpoint
-- [ ] Logout with token blacklist
-- [ ] Session persistence (localStorage + HTTP-only cookies)
+#### Authentication (DONE — see ✅ Working)
+- Google OAuth backend validation, JWT tokens, `get_current_user` deps, user provisioning, logout — all complete
+- ⚠️ Not done: token refresh rotation and HTTP-only cookie session (Bearer-only today)
 
-#### Database
-- [ ] SQLAlchemy declarative models (User, Image, Job, Variant, AuditLog)
-- [ ] Alembic migration setup + initial migration
-- [ ] PostgreSQL connection (via asyncpg)
-- [ ] Session factory + dependency injection
-- [ ] Indexes for common queries (user_id, status, created_at)
-- [ ] Seed data script
-- [ ] Connection pooling configuration
+#### Database (DONE — see ✅ Working)
+- SQLAlchemy 2.0 models, Alembic migrations, asyncpg, DI session, indexes, pooling, startup ping — all complete
+- ⚠️ Not done: seed data script (minor)
 
-#### Repository Layer
-- [ ] `BaseRepository` ABC with CRUD operations
-- [ ] `UserRepository`
-- [ ] `ImageRepository`
-- [ ] `JobRepository`
+#### Repository Layer (4 of 5 done)
+- [x] `BaseRepository` ABC with CRUD operations
+- [x] `UserRepository`
+- [x] `ImageRepository`
+- [x] `JobRepository`
 - [ ] `AuditRepository`
 
-#### Storage Abstraction
-- [ ] `StorageProvider` ABC (upload, download, delete, list, signed URL)
-- [ ] Local filesystem provider (dev)
-- [ ] S3-compatible provider (production — AWS S3, Cloudflare R2, MinIO)
-- [ ] Provider selection via config
+#### Storage Abstraction (DONE — see ✅ Working)
+- StorageProvider ABC, local FS provider, S3/R2/MinIO provider, provider selection via config — all complete
 
-#### Image Upload
-- [ ] Multi-file upload (drag-and-drop zone)
-- [ ] Upload progress bar (XMLHttpRequest `upload.onprogress` or fetch w/ ReadableStream)
-- [ ] Cancel in-flight upload (`AbortController`)
-- [ ] Duplicate detection (SHA-256 checksum)
+#### Image Upload (4 of 5 done)
+- [x] Multi-file upload (`POST /api/v1/upload`)
+- [x] Upload progress bar (`onUploadProgress` → `UploadProgress` component)
+- [x] Cancel in-flight upload (`AbortController` in `Home.tsx` → `smartUpload` signal)
+- [x] Duplicate detection (SHA-256 checksum)
 - [ ] Folder upload (HTML5 `webkitdirectory`)
+- ⚠️ Additional hardening: chunked-upload path-traversal guard, chunk/size caps, bounded reads
 
 #### Image Processing (new ops)
 - [ ] Crop (selection box or fixed aspect ratio)
@@ -152,31 +157,31 @@
 - [ ] Batch processing (multi-image → multi-job)
 - [ ] Image compression ratio optimization
 
-#### Image Management
-- [ ] Image library view (grid of thumbnails)
-- [ ] Search by filename
+#### Image Management (4 of 6 done)
+- [ ] Image library view (grid of thumbnails) — backend list done, grid UI pending
+- [x] Search by filename
 - [ ] Filter by date, MIME type, processing status
 - [ ] Sort by date, size, name
-- [ ] Soft-delete + restore
+- [x] Soft-delete + restore
 - [ ] Batch download (zip archive)
 
-#### Processing Jobs
-- [ ] Job record (id, status, operation, params, result)
-- [ ] Job status polling (WebSocket or short polling)
-- [ ] Job history list
+#### Processing Jobs (3 of 6 done)
+- [x] Job record (id, status, operation, params, result) — `Job`/`Variant` models + persistence
+- [ ] Job status polling (WebSocket or short polling) — not needed yet (synchronous processing)
+- [x] Job history list — `/api/v1/history` + History page
 - [ ] Retry failed job
 - [ ] Cancel pending job
 - [ ] Celery background worker task
 
-#### Frontend Architecture
-- [ ] React Router 7 (pages: Home, Library, JobHistory, Login, Admin)
-- [ ] TanStack Query (API cache, loading states, refetch)
-- [ ] React Hook Form (form state management)
-- [ ] Zod schema validation (forms + API response shape)
-- [ ] Axios HTTP client (JWT interceptor, base URL config)
+#### Frontend Architecture (4 of 5 done)
+- [x] React Router 7 (pages: Home, Login, History, About)
+- [x] TanStack Query (react-query in AuthContext + History page)
+- [ ] React Hook Form (form state management) — lib present, not wired to forms yet
+- [ ] Zod schema validation (forms + API response shape) — lib present, not wired yet
+- [x] Axios HTTP client (JWT interceptor in `lib/api.ts`, base URL config, 401 handling)
 
 #### Notifications
-- [ ] Toast notifications (success, error, info)
+- [x] Toast notifications (success, error, info) — `useToast()` in `Toast.tsx`, used on Home
 - [ ] Processing completion notification (in-app)
 - [ ] Email notification for long jobs
 
@@ -195,8 +200,8 @@
 - [ ] Nginx config (reverse proxy, SSL, static files, rate limiting)
 - [ ] Healthchecks for all services
 
-#### Testing
-- [ ] pytest + pytest-asyncio setup
+#### Testing (1 of 3 suites done)
+- [x] pytest security suite — 37 tests pass (`server/tests/test_config_and_jwt.py`, `test_upload_security.py`, `test_rate_limit.py`, `test_protections.py`)
 - [ ] API test suite (test_main.py → test health, process, errors)
 - [ ] Processor unit tests (each operation, edge cases)
 - [ ] Frontend component tests (Vitest + Testing Library)
@@ -209,13 +214,14 @@
 - [ ] Celery worker monitoring (Flower)
 - [ ] Application performance monitoring
 
-#### Security
-- [ ] Rate limiting (SlowAPI or custom middleware)
-- [ ] JWT auth + refresh rotation
+#### Security (6 of 7 done)
+- [x] Rate limiting (auth endpoints — in-process sliding-window limiter)
+- [ ] JWT auth + refresh rotation (access tokens only today)
 - [ ] Virus scanning for uploaded files
 - [ ] HTTPS configuration (Nginx + certbot)
-- [ ] Secrets management (env vars, not checked in)
-- [ ] CSP headers
+- [x] Secrets management (strict env-based; real SECRET_KEY in `.env`, `.env.example` in repo)
+- [x] CSP headers (+ COOP, CORP, HSTS, nosniff, XFO, referrer policy)
+- [x] Request/path hardening (traversal guard, bounded reads, PDF page cap, header-injection-safe filenames, nonce-verified OAuth)
 
 ---
 
@@ -238,26 +244,28 @@
 | Side-by-side preview panels | ✅ Complete | — |
 | File size display | ✅ Complete | — |
 
-### Phase 2: Production Foundation — ⏳ 0% Complete
+### Phase 2: Production Foundation — ⏳ ~50% Complete
 
-**Goal:** Auth, database, image library, background jobs, Docker deployment.
+**Goal:** Auth, database, image library, history, Docker deployment.
 
 | Step | Status | Target |
 |------|--------|--------|
-| Google OAuth backend | ❌ Not started | TBD |
-| JWT auth middleware + dependencies | ❌ Not started | TBD |
-| PostgreSQL + SQLAlchemy models + Alembic | ❌ Not started | TBD |
-| Repository layer | ❌ Not started | TBD |
-| Storage abstraction (local + S3) | ❌ Not started | TBD |
-| Image CRUD API + upload endpoint | ❌ Not started | TBD |
+| Google OAuth backend | ✅ Complete | — |
+| JWT auth middleware + dependencies | ✅ Complete | — |
+| PostgreSQL + SQLAlchemy models + Alembic | ✅ Complete | — |
+| Repository layer | 🟡 Partial (4 of 5 repos) | — |
+| Storage abstraction (local + S3) | ✅ Complete | — |
+| Image CRUD API + upload endpoint | ✅ Complete | — |
 | Image library frontend (list + search + delete) | ❌ Not started | TBD |
-| Job system (records + status) | ❌ Not started | TBD |
+| Job system (records + status) | ✅ Complete (records + history) | — |
+| History page (+ About page) | ✅ Complete | — |
+| Security hardening | ✅ Complete (rate limit, nonce, traversal, caps, CSP, tests) | — |
 | Celery worker for async processing | ❌ Not started | TBD |
 | Redis setup | ❌ Not started | TBD |
-| React Router + TanStack Query + RHF + Zod + Axios | ❌ Not started | TBD |
-| Drag-and-drop upload UI | ❌ Not started | TBD |
+| React Router + TanStack Query | ✅ Complete (Router + Query + Axios) | RHF/Zod wiring pending |
+| Drag-and-drop upload UI | ✅ Complete (dropzone + progress + cancel) | — |
 | Docker Compose (all services) | ❌ Not started | TBD |
-| Frontend production build + Nginx serve | ❌ Not started | TBD |
+| Frontend production build + Nginx serve | 🟡 Partial (vite build passes) | Nginx serve TBD |
 
 ### Phase 3: Power Features — ⏳ 0% Complete
 
@@ -298,17 +306,15 @@
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| All processing in-memory — no persistence | High | Images lost on restart |
-| No auth — anyone can hit the API | High | API is open, CORS is the only barrier |
-| No database — stateful data is ephemeral | High | No job history, no user data |
-| Single frontend component (App.tsx) | Medium | 315 lines, doing everything |
-| No loading states beyond "Processing" | Medium | No skeleton, no progress percent |
-| No download button for processed image | Low | User must right-click save |
-| `next` keyword used in README title | Trivial | Markdown rendering issue |
-| `.env` checked into repo with placeholder values | Low | Add to `.gitignore` or use `.env.example` |
+| No auth — anyone can hit the API | Fixed | Google OAuth + JWT Bearer now required on all data routes |
+| No database/job-history | Fixed | PostgreSQL + Alembic + `Job`/`Variant` persistence + `/history` |
+| Processing runs in-memory (no persistence) | Fixed | Results persisted to storage + DB on every process/to-pdf |
+| All processing synchronous in-request | Medium | Long jobs block the HTTP request; Celery planned |
+| Refresh-token rotation / cookie sessions not done | Medium | Bearer-only today; HTTP-only cookies planned |
+| No image library grid frontend | Medium | Backend done, grid UI pending |
 | No request timeout for long processing | Medium | Large images could hang |
-| WebP signature check parses raw bytes manually | Low | Works but fragile — bytes 8-12 hardcoded |
 | Logging is basic stdout — no JSON format | Low | Hard to aggregate in production |
+| `.env` carries real SECRET_KEY | Low | Keep it out of git; `.env` is gitignored |
 
 ---
 

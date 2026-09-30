@@ -16,8 +16,8 @@ class Variant(Base, TimestampMixin):
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False, index=True,
     )
-    image_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("images.id"), nullable=False, index=True,
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("images.id"), nullable=True, index=True,
     )
     operation: Mapped[str] = mapped_column(String(50), nullable=False)
     params: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

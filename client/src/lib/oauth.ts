@@ -14,6 +14,7 @@ export const GOOGLE_REDIRECT_URI =
 
 const STATE_KEY = "oauth_state";
 const VERIFIER_KEY = "oauth_verifier";
+const NONCE_KEY = "oauth_nonce";
 
 function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -52,17 +53,24 @@ export function buildGoogleAuthUrl(): URL {
   return url;
 }
 
-/** Persist `state` + `code_verifier` before redirecting to Google. */
-export function stashOAuthState(state: string, verifier: string): void {
+/** Persist `state` + `code_verifier` (+ nonce) before redirecting to Google. */
+export function stashOAuthState(state: string, verifier: string, nonce: string): void {
   sessionStorage.setItem(STATE_KEY, state);
   sessionStorage.setItem(VERIFIER_KEY, verifier);
+  sessionStorage.setItem(NONCE_KEY, nonce);
 }
 
-/** Read and clear the pending `state`/`verifier` once we return from Google. */
-export function takeOAuthState(): { state: string | null; verifier: string | null } {
+/** Read and clear the pending `state`/`verifier`/`nonce` after returning from Google. */
+export function takeOAuthState(): {
+  state: string | null;
+  verifier: string | null;
+  nonce: string | null;
+} {
   const state = sessionStorage.getItem(STATE_KEY);
   const verifier = sessionStorage.getItem(VERIFIER_KEY);
+  const nonce = sessionStorage.getItem(NONCE_KEY);
   sessionStorage.removeItem(STATE_KEY);
   sessionStorage.removeItem(VERIFIER_KEY);
-  return { state, verifier };
+  sessionStorage.removeItem(NONCE_KEY);
+  return { state, verifier, nonce };
 }
