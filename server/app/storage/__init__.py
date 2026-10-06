@@ -13,12 +13,16 @@ def get_storage() -> StorageProvider:
             from app.storage.s3 import S3StorageProvider
 
             _storage = S3StorageProvider()
+        elif settings.storage_provider == "cloudinary":
+            from app.storage.cloudinary import CloudinaryStorageProvider
+
+            _storage = CloudinaryStorageProvider()
         elif settings.storage_provider == "local":
             _storage = LocalStorageProvider()
         else:
             raise ValueError(
                 f"Unknown storage_provider '{settings.storage_provider}'. "
-                "Use 'local' or 's3'."
+                "Use 'local', 's3' or 'cloudinary'."
             )
     return _storage
 

@@ -1,0 +1,35 @@
+# Environment — never commit real credentials. Keep .env.example tracked.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local upload / chunk staging (ephemeral on Render, never deployed)
+data/
+server/data/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Tooling / editor / OS
+.vscode/
+.idea/
+.claude/settings.local.json
+.codex/
+.DS_Store
+Thumbs.db

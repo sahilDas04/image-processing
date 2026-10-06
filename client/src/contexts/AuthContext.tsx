@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/api";
-import { takeOAuthState } from "@/lib/oauth";
+import { GOOGLE_REDIRECT_URI, takeOAuthState } from "@/lib/oauth";
 
 // ── Types ──
 
@@ -17,8 +17,6 @@ export type User = {
   name: string | null;
   avatar_url: string | null;
 };
-
-const GOOGLE_REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? "http://localhost:5173";
 
 type AuthContextValue = {
   user: User | null;

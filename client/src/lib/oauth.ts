@@ -1,16 +1,15 @@
 // Google sign-in via the server-side authorization-code + PKCE flow.
 //
 // Unlike the Google Identity Services popup, this flow only requires the OAuth
-// client's *Authorized redirect URIs* to be registered (http://localhost:5173)
-// — it does not depend on the "Authorized JavaScript origins" field at all.
+// client's *Authorized redirect URIs* to be registered — it does not depend on
+// the "Authorized JavaScript origins" field at all.
+//
+// The redirect URI is the frontend origin (http://localhost:5173 in dev,
+// https://<app>.vercel.app in production) and must be registered in Google Cloud
+// Console. The backend validates the origin of whatever we send back to it.
+import { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI } from "@/lib/env";
 
-export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
-
-// Must match an entry under "Authorized redirect URIs" in Google Cloud Console
-// for this client, and must be exactly what the backend exchanges the code with.
-export const GOOGLE_REDIRECT_URI =
-  import.meta.env.VITE_GOOGLE_REDIRECT_URI ?? "http://localhost:5173";
+export { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI };
 
 const STATE_KEY = "oauth_state";
 const VERIFIER_KEY = "oauth_verifier";

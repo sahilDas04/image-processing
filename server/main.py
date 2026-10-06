@@ -22,8 +22,10 @@ assert_safe_cors_origins(settings.allowed_origins)
 
 app = FastAPI(
     title=settings.app_name,
-    docs_url=None,
-    redoc_url=None,
+    # Interactive docs expose the full route/parameter surface, so they follow
+    # the same flag as openapi.json and stay off in production.
+    docs_url="/docs" if settings.debug_openapi else None,
+    redoc_url="/redoc" if settings.debug_openapi else None,
     openapi_url="/openapi.json" if settings.debug_openapi else None,
 )
 

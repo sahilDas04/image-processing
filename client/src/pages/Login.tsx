@@ -5,14 +5,15 @@ import { IconBrandGoogle, IconSparkles, IconAlertCircle, IconShield, IconBolt, I
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/env";
 import {
   GOOGLE_CLIENT_ID,
-  GOOGLE_REDIRECT_URI,
   buildGoogleAuthUrl,
   generateCodeChallenge,
   generateRandomToken,
   stashOAuthState,
 } from "@/lib/oauth";
+import { formatBytes } from "@/lib/utils";
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading, clearAuthError } = useAuth();
@@ -73,10 +74,6 @@ export default function LoginPage() {
     );
     url.searchParams.set("code_challenge_method", "S256");
 
-    console.log("[Auth] Redirecting to Google OAuth:", url.toString());
-    console.log("[Auth] Redirect URI:", GOOGLE_REDIRECT_URI);
-    console.log("[Auth] Client ID:", GOOGLE_CLIENT_ID?.substring(0, 20) + "...");
-
     window.location.href = url.toString();
   }
 
@@ -125,7 +122,10 @@ export default function LoginPage() {
                   <IconStack2 className="size-3.5 text-primary" aria-hidden="true" /> Batch processing
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full glass-control px-3 py-1.5 text-xs font-medium text-foreground">
-                  <IconShield className="size-3.5 text-primary" aria-hidden="true" /> 2.5 GB files
+                  <IconShield className="size-3.5 text-primary" aria-hidden="true" /> {formatBytes(
+                    MAX_UPLOAD_SIZE_BYTES,
+                  )}{" "}
+                  files
                 </span>
               </div>
             </div>

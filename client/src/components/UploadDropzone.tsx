@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconPhotoUp, IconX, IconAlertTriangle, IconFile, IconPhoto } from "@tabler/icons-react";
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/env";
 import { cn, formatBytes } from "@/lib/utils";
 
 interface UploadDropzoneProps {
@@ -12,7 +13,9 @@ interface UploadDropzoneProps {
   disabled?: boolean;
 }
 
-const DEFAULT_MAX_SIZE = 2.5 * 1024 * 1024 * 1024; // 2.5 GB
+// Mirrors the backend's MAX_UPLOAD_SIZE_MB. Keep both in sync or the UI will
+// either reject valid files or let through ones the API refuses with a 413.
+const DEFAULT_MAX_SIZE = MAX_UPLOAD_SIZE_BYTES;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_PDF_TYPES = ["application/pdf"];
 

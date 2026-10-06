@@ -10,25 +10,34 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      # Comma-separated list of browser origins allowed to call this API.
+      # Must NOT contain '*' — the app refuses to boot on a wildcard CORS policy.
       - key: ALLOWED_ORIGINS
+        sync: false
+      # Canonical production frontend origin. Used to validate the OAuth
+      # redirect_uri sent by the SPA, so login works without hardcoded hosts.
+      - key: FRONTEND_URL
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      # S3-compatible object storage — Cloudflare R2 free tier (10 GB) recommended,
-      # because Render free-tier filesystem is ephemeral (uploads vanish on redeploy).
+      # Cloudinary for persistent media storage. Render's free-tier filesystem is
+      # ephemeral: anything written to server/data is lost on redeploy/restart.
       - key: STORAGE_PROVIDER
-        value: s3
-      - key: S3_BUCKET
+        value: cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
         sync: false
-      - key: S3_ENDPOINT_URL
-        value: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-      - key: S3_ACCESS_KEY
+      - key: CLOUDINARY_API_KEY
         sync: false
-      - key: S3_SECRET_KEY
+      - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: S3_REGION
-        value: auto
+      # Free instances have 512 MB RAM and uploads are buffered in memory before
+      # decoding, so the 2560 MB default OOM-kills the process. Raise only with a
+      # paid plan.
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "25"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "30"
       - key: DEBUG_OPENAPI
         value: "false"

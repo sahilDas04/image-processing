@@ -59,13 +59,11 @@ class MessageResponse(BaseModel):
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
-# Redirect URIs the OAuth client is allowed to return to. The frontend must
-# send exactly the registered URI; Google enforces the exact match server-side
-# (only the origin is pre-checked here as a guard).
-ALLOWED_REDIRECT_ORIGINS = {
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-}
+# Redirect URI origins the OAuth client may return to. Derived from
+# FRONTEND_URL + ALLOWED_ORIGINS rather than hardcoded, so a deployed SPA
+# (e.g. https://app.vercel.app) can log in without a code change. Google still
+# enforces the exact-URI match server-side; this is only a pre-flight guard
+# that keeps an attacker from pointing the code exchange at their own origin.
 
 
 # ── Helpers ──
@@ -152,7 +150,7 @@ async def google_code_login(
 
     parsed = urlparse(body.redirect_uri)
     origin = f"{parsed.scheme}://{parsed.netloc}"
-    if origin not in ALLOWED_REDIRECT_ORIGINS:
+    if origin not in settings.oauth_redirect_origins:
         logger.warning("Unregistered redirect_uri: %s (origin: %s)", body.redirect_uri, origin)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
