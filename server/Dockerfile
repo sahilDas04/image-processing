@@ -27,7 +27,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 
 # Make the virtual environment the default Python environment
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app"
 
 EXPOSE 8000
 
