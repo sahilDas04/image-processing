@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Store files as raw assets so images and PDFs retain their original bytes.
 _RESOURCE_TYPE = "raw"
+_CHUNK_SIZE = 6_000_000
 
 
 def _to_public_id(key: str) -> str:
@@ -71,14 +72,15 @@ class CloudinaryStorageProvider(StorageProvider):
         data: bytes,
         content_type: str | None = None,
     ) -> str:
-        """Upload file bytes to Cloudinary."""
+        """Upload file bytes to Cloudinary using chunked upload."""
         upload = partial(
-            self._uploader.upload,
+            self._uploader.upload_large,
             data,
             public_id=self._remote_public_id(key),
             resource_type=_RESOURCE_TYPE,
             type=self.delivery_type,
             overwrite=True,
+            chunk_size=_CHUNK_SIZE,
         )
 
         result = await asyncio.to_thread(upload)
@@ -186,8 +188,6 @@ class CloudinaryStorageProvider(StorageProvider):
             await asyncio.to_thread(probe)
             return True
         except Exception as exc:
-            # Cloudinary raises an exception when the resource is not found.
-            # Do not hide unrelated API or network errors as "not found".
             status_code = getattr(exc, "http_status", None)
             if status_code == 404:
                 return False
